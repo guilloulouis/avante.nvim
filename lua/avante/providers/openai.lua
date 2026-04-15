@@ -123,7 +123,7 @@ function M:parse_messages(opts)
   if self.is_reasoning_model(provider_conf.model) then
     table.insert(messages, { role = "developer", content = system_prompt })
   else
-    table.insert(messages, { role = "system", content = system_prompt })
+    table.insert(messages, { role = "user", content = system_prompt })
   end
 
   local has_tool_use = false
