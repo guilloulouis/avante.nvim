@@ -520,7 +520,6 @@ function M.transform_openai_usage(usage)
   }
   return res
 end
-
 function M:parse_response(ctx, data_stream, _, opts)
   if data_stream:match('"%[DONE%]":') or data_stream == "[DONE]" then
     self:finish_pending_messages(ctx, opts)
@@ -533,7 +532,11 @@ function M:parse_response(ctx, data_stream, _, opts)
     return
   end
 
-  local jsn = vim.json.decode(data_stream)
+  local ok, jsn = pcall(vim.json.decode, data_stream)
+  if not ok then
+    Utils.debug("Failed to parse JSON:", data_stream:sub(1, 200))
+    return
+  end
 
   -- Check if this is a Response API event (has 'type' field)
   if jsn.type and type(jsn.type) == "string" then
@@ -635,7 +638,7 @@ function M:parse_response(ctx, data_stream, _, opts)
     return
   end
 
-  -- Chat Completions API format (original code)
+  -- Chat Completions API format
   if jsn.usage and jsn.usage ~= vim.NIL then
     if opts.update_tokens_usage then
       local usage = self.transform_openai_usage(jsn.usage)
@@ -646,16 +649,31 @@ function M:parse_response(ctx, data_stream, _, opts)
     opts.on_stop({ reason = "error", error = vim.inspect(jsn.error) })
     return
   end
-  ---@cast jsn AvanteOpenAIChatResponse
+
   if not jsn.choices then return end
   local choice = jsn.choices[1]
   if not choice then return end
+
   local delta = choice.delta
+
+  -- Handle non-streaming response (Sourcegraph, etc.)
   if not delta then
-    local provider_conf = Providers.parse_config(self)
-    if provider_conf.model:match("o1") then delta = choice.message end
+    local message = choice.message
+    if message then
+      if message.content and message.content ~= vim.NIL and message.content ~= "" then
+        if opts.on_chunk then opts.on_chunk(message.content) end
+        self:add_text_message(ctx, message.content, "generated", opts)
+      end
+      -- Check finish_reason for non-streaming
+      if choice.finish_reason == "stop" or choice.finish_reason == "length" then
+        self:finish_pending_messages(ctx, opts)
+        opts.on_stop({ reason = "complete", usage = self.transform_openai_usage(jsn.usage) })
+      end
+      return
+    end
+    return
   end
-  if not delta then return end
+
   if delta.reasoning_content and delta.reasoning_content ~= vim.NIL and delta.reasoning_content ~= "" then
     if ctx.returned_think_start_tag == nil or not ctx.returned_think_start_tag then
       ctx.returned_think_start_tag = true
@@ -734,7 +752,6 @@ function M:parse_response(ctx, data_stream, _, opts)
     })
   end
 end
-
 function M:parse_response_without_stream(data, _, opts)
   ---@type AvanteOpenAIChatResponse
   local json = vim.json.decode(data)
