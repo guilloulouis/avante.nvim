@@ -18,7 +18,13 @@ M.role_map = {
   assistant = "assistant",
 }
 
-function M:is_disable_stream() return false end
+function M:is_disable_stream()
+  local provider_conf, _ = Providers.parse_config(self)
+  if M.is_sourcegraph(provider_conf.endpoint) then
+    return true
+  end
+  return false
+end
 
 ---@param tool AvanteLLMTool
 ---@return AvanteOpenAITool
@@ -807,13 +813,17 @@ function M:parse_curl_args(prompt_opts)
   -- Determine endpoint path based on use_response_api
   local endpoint_path = use_response_api and "/responses" or "/chat/completions"
 
+  local stream = true
+  if M.is_sourcegraph(provider_conf.endpoint) then
+    stream = false
+  end
   local parsed_messages = self:parse_messages(prompt_opts)
 
   -- Build base body
   local base_body = {
     model = provider_conf.model,
     stop = stop,
-    stream = true,
+    stream = stream,
     tools = tools,
   }
 
