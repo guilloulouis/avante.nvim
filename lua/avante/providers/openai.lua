@@ -758,8 +758,12 @@ function M:parse_curl_args(prompt_opts)
       Utils.error(Config.provider .. ": API key is not set, please set it in your environment variable or config file")
       return nil
     end
-    headers["Authorization"] = "Bearer " .. api_key
-  end
+      if M.is_sourcegraph(provider_conf.endpoint) then
+        headers["Authorization"] = "token " .. api_key
+      else
+        headers["Authorization"] = "Bearer " .. api_key
+      end
+    end
 
   if M.is_openrouter(provider_conf.endpoint) then
     headers["HTTP-Referer"] = "https://github.com/yetone/avante.nvim"
