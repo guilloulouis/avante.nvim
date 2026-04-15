@@ -47,6 +47,8 @@ function M.is_openrouter(url) return url:match("^https://openrouter%.ai/") end
 
 function M.is_mistral(url) return url:match("^https://api%.mistral%.ai/") end
 
+function M.is_sourcegraph(url) return url:match(".*sourcegraph.*") end
+
 ---@param opts AvantePromptOptions
 function M.get_user_message(opts)
   vim.deprecate("get_user_message", "parse_messages", "0.1.0", "avante.nvim")
@@ -851,9 +853,13 @@ function M:parse_curl_args(prompt_opts)
     base_body.stream_options = nil
   else
     base_body.messages = parsed_messages
-    base_body.stream_options = not M.is_mistral(provider_conf.endpoint) and {
-      include_usage = true,
-    } or nil
+    base_body.stream_options = (
+      not M.is_mistral(provider_conf.endpoint) and not M.is_sourcegraph(provider_conf.endpoint)
+    )
+        and {
+          include_usage = true,
+        }
+      or nil
   end
 
   return {
